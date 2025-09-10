@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+
+<html lang="vi">
+    <head>
+        <title>Hí lô</title>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <link rel="stylesheet" href="../css/welcome.css" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <!-- Link to your CSS file -->
+        <link
+            href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400..800&family=Lobster&display=swap"
+            rel="stylesheet"
+        />
+        <link rel="icon" href="pics/favicon.ico" type="image/x-icon" />
+        <style>
+            html,
+            body {
+                height: 100%;
+            } /* Safari: % height chắc chắn */
+
+            body {
+                font-family: 'Baloo 2', cursive;
+                margin: 0;
+                padding: 0;
+                background: #ec8e8c;
+                -webkit-font-smoothing: antialiased; /* Safari/Chrome macOS */
+                -moz-osx-font-smoothing: grayscale; /* Firefox macOS     */
+                text-rendering: optimizeLegibility;
+                margin: 0;
+                color: #5a3e3e; /* Soft brown for text */
+                line-height: 1.6;
+            }
+
+            .container {
+                padding: 10px;
+                background: #ffcad4; /* Light pastel pink */
+                border-bottom-left-radius: 20px;
+                border-bottom-right-radius: 20px;
+                text-align: center;
+                box-shadow: 0px 5px 15px rgba(255, 105, 180, 0.2);
+            }
+            .separator {
+                border: 0;
+                height: 2px;
+                background: linear-gradient(to right, #ff6f91, #ffcad4);
+                margin: 10px auto;
+                max-width: 85%;
+                opacity: 0.7;
+            }
+            header h1 {
+                margin: 10px 0;
+                font-size: 2.5rem;
+                color: #ff6f91; /* Bright pink */
+                font-family: 'Lobster', cursive;
+            }
+
+            header p {
+                margin: 5px 0;
+                font-size: 1.2rem;
+            }
+            body {
+                position: relative; /* Establish a positioning context */
+                height: 100vh; /* Full viewport height */
+                margin: 0; /* Remove default margin */
+            }
+
+            img {
+                width: 50px;
+                transform: translateY(10px);
+            }
+            /* Stack lại các phần tử đang đặt position:absolute khi màn nhỏ */
+            @media (max-width: 840px) {
+                /* Bắt mọi phần tử có style inline chứa 'position: absolute' */
+                [style*='position: absolute'] {
+                    position: static !important;
+                    display: block !important;
+                    margin: 12px auto !important;
+                    transform: none !important;
+                    max-width: min(80%, 420px) !important;
+                }
+
+                /* Tiêu đề to hơn nhưng co giãn hợp lý & căn giữa */
+                h2[style*='position: absolute'] {
+                    font-size: clamp(22px, 6vw, 34px) !important;
+                    text-align: center !important;
+                    color: #fff8dc; /* cornsilk giữ vibe */
+                }
+
+                /* Ảnh “mồi” đặt mềm lại */
+                img[alt=''],
+                img[alt='bo'],
+                img[alt='dog'] {
+                    width: min(60%, 320px) !important;
+                }
+
+                /* Nút bấm to vừa tay */
+                .custom-button {
+                    font-size: clamp(16px, 4.2vw, 20px);
+                    padding: 10px 16px;
+                }
+            }
+            body {
+                overflow-x: hidden;
+            }
+            :root {
+                scrollbar-gutter: stable both-edges;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <header>
+                <h1>CHÀO ĐỒNG CHÍ AN ✨</h1>
+                <p>From: <strong>Đồng chí Toàn</strong></p>
+                <p>💌 🧡 🎁</p>
+            </header>
+            <hr class="separator" />
+        </div>
+        <div>
+            <h2
+                style="
+                    color: cornsilk;
+                    font-size: 40px;
+                    position: absolute;
+                    top: 35%;
+                    left: 30%;
+                "
+            >
+                Entry question: Bơ có béo khong?
+            </h2>
+            <img
+                src="pics/sharky-removebg.png"
+                alt=""
+                style="width: 15%; position: absolute; top: 30%; left: 10%"
+            />
+        </div>
+        <div>
+            <img
+                src="pics/bo.jfif"
+                alt="bo"
+                style="width: 15%; position: absolute; top: 30%; left: 75%"
+            />
+            <img
+                src="pics/bo3.jpg"
+                alt="bo"
+                style="width: 15%; position: absolute; top: 67%; left: 25%"
+            />
+
+            <img
+                src="pics/arrow1-removebg-preview.png"
+                alt="arrow1"
+                style="width: 10%; position: absolute; top: 50%; left: 25%"
+            />
+
+            <img
+                src="pics/arrow5-removebg-preview.png"
+                alt=""
+                style="width: 6%; position: absolute; top: 65%; left: 42%"
+            />
+
+            <button
+                id="accessButton"
+                class="custom-button"
+                style="position: absolute; top: 55%; left: 35%"
+            >
+                Béooo
+            </button>
+            <button
+                id="button0"
+                class="custom-button"
+                style="position: absolute; top: 55%; left: 50%"
+            >
+                Khong béo âu
+            </button>
+            <img
+                src="pics/dog.png"
+                alt="dog"
+                style="position: absolute; top: 70%; left: 70%; width: 15%"
+            />
+            <button
+                id="button1"
+                class="custom-button new-button"
+                style="position: absolute; top: 70%; left: 50%; font-size: 20px"
+            >
+                (Cho suy nghi lai) Vẫn khong béo
+            </button>
+            <button
+                id="button2"
+                class="custom-button new-button"
+                style="position: absolute; top: 10%; left: 20%; font-size: 20px"
+            >
+                (Cho suy nghi lai x2) Khom béo
+            </button>
+
+            <button
+                id="button3"
+                class="custom-button new-button"
+                style="position: absolute; top: 70%; left: 10%; font-size: 20px"
+            >
+                Dech béo
+            </button>
+        </div>
+
+        <script src="../js/scripts.js"></script>
+    </body>
+</html>

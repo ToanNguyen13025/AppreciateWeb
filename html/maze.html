@@ -1,0 +1,1387 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <title>Maze + Sprite</title>
+        <style>
+            html,
+            body {
+                height: 100%;
+            }
+            body {
+                overflow: hidden;
+            }
+            body {
+                margin: 0;
+                background: linear-gradient(180deg, #deb8d9 0%, #edb4eb 100%);
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                min-height: 100vh;
+            }
+            #game {
+                image-rendering: pixelated;
+                border: 2px solid #333;
+                background: #fff;
+            }
+
+            .backdrop {
+                position: fixed;
+                inset: 0;
+                background: rgba(0, 0, 0, 0.55);
+                display: grid;
+                place-items: center;
+                z-index: 9999;
+            }
+            .hidden {
+                display: none !important;
+            }
+            .modal {
+                width: min(520px, calc(100vw - 32px));
+                background: #188d60;
+                color: #fff;
+                border: 2px solid #444;
+                border-radius: 10px;
+                padding: 18px 20px;
+                box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+                font-family: system-ui, -apple-system, Segoe UI, Roboto,
+                    sans-serif;
+            }
+
+            .modal h1 {
+                margin: 0 0 6px;
+                font-size: 22px;
+            }
+            .subtitle {
+                margin: 0 0 10px;
+                color: #cfd3dc;
+            }
+
+            .guide {
+                margin: 0 0 12px 18px;
+                padding: 0;
+            }
+            .guide li {
+                margin: 6px 0;
+            }
+
+            .opt {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                margin: 8px 0 14px;
+                color: #c8ffc8;
+            }
+
+            .actions {
+                display: flex;
+                gap: 10px;
+                justify-content: flex-end;
+            }
+
+            .btn {
+                background: #0e5031;
+                color: #fff;
+                border: 1px solid #666;
+                padding: 8px 14px;
+                border-radius: 8px;
+                cursor: pointer;
+            }
+            .btn:hover {
+                filter: brightness(1.1);
+            }
+            .btn.primary {
+                background: #3758dd;
+                border-color: #3851d0;
+            }
+
+            .menu-btn {
+                position: absolute;
+                width: 60px;
+                top: 10px;
+                left: 10px;
+                background: #8a1889;
+                color: #fff;
+                border: none;
+                padding: 10px;
+                border-radius: 5px;
+                cursor: pointer;
+                z-index: 10000;
+            }
+
+            .menu-btn:hover {
+                background: #444;
+            }
+        </style>
+    </head>
+    <body>
+        <!-- Welcome / Help Modal -->
+        <div id="introBackdrop" class="backdrop hidden">
+            <div class="modal">
+                <h1>Thử thách: Hành trình đi tìm Bơ</h1>
+                <p class="subtitle">
+                    Cậu phải tìm đường kiếm Bơ, sau đây là hướng dẫn cho cậu
+                </p>
+
+                <ul class="guide">
+                    <li>⬆️ ⬇️ ⬅️ ➡️ để di chuyển.</li>
+                    <li>🎯 Mục tiêu: tìm <b>Bơ</b> đang đi lạc</li>
+                    <li>🌳 Cây là vật cản</li>
+                    <li>
+                        🍬 Đồ ăn trên đường sẽ giúp cậu <b>tăng tốc</b> trong
+                        thời gian ngắn
+                    </li>
+                    <li>
+                        😺 Nếu cậu bị tụi mèo bắt, cậu sẽ phải đứng lại nựng
+                        chúng => Bơ buồn :))
+                    </li>
+                    <li>Cố nhên! Pause ở góc trái nhó.</li>
+                    <br />
+                    <form>
+                        <input type="text" placeholder="code" />
+                        <button type="button" class="btn" style="height: 30px">
+                            Submit
+                        </button>
+                        <script>
+                            document
+                                .querySelector('form button')
+                                .addEventListener('click', function () {
+                                    const val = document
+                                        .querySelector(
+                                            'form input[type="text"]'
+                                        )
+                                        .value.trim();
+                                    if (val === '2003') {
+                                        window.location.href = 'prize.html';
+                                    }
+                                });
+                        </script>
+                    </form>
+                </ul>
+
+                <div class="actions">
+                    <button id="btnStart" class="btn primary">
+                        Bắt đầu chơi (Enter)
+                    </button>
+                    <button id="btnBack" class="btn">Quay lại</button>
+                </div>
+            </div>
+        </div>
+
+        <button id="menuBtn" class="menu-btn" title="Menu">&#9776;</button>
+
+        <canvas id="game"></canvas>
+
+        <script>
+            document.getElementById('menuBtn').addEventListener('click', () => {
+                showIntro(true); // mở lại modal hướng dẫn
+            });
+            const canvas = document.getElementById('game');
+            const ctx = canvas.getContext('2d');
+            ctx.imageSmoothingEnabled = false;
+
+            // ===== Maze =====
+            const mazeMap = [
+                [5, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 6],
+                [7, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 8],
+                [7, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 1, 0, 1, 0, 1, 0, 8],
+                [7, 0, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 1, 1, 1, 0, 8],
+                [7, 1, 1, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 8],
+                [7, 0, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 8],
+                [7, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8],
+                [7, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 8],
+                [7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 8],
+                [7, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 0, 8],
+                [7, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8],
+                [7, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 8],
+                [7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8],
+                [7, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 8],
+                [7, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 8],
+                [4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 13],
+            ];
+            const tileSize = 48; // mẹo: 64 cho scale đẹp 32->64
+            function setupCanvasDPR() {
+                const cssW = mazeMap[0].length * tileSize;
+                const cssH = mazeMap.length * tileSize;
+                const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+                canvas.style.width = cssW + 'px';
+                canvas.style.height = cssH + 'px';
+                canvas.width = Math.floor(cssW * dpr);
+                canvas.height = Math.floor(cssH * dpr);
+
+                ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            }
+            setupCanvasDPR();
+            window.addEventListener('resize', setupCanvasDPR);
+
+            // (tuỳ chọn) Ảnh tường
+            const grassImg = new Image();
+            grassImg.src = 'pics/tree.png';
+            let grassReady = false;
+            grassImg.onload = () => (grassReady = true);
+
+            const pathMiddleImg = new Image();
+            pathMiddleImg.src = 'pics/grass.png';
+            let pathMiddleReady = false;
+            pathMiddleImg.onload = () => (pathMiddleReady = true);
+
+            // path
+            const pathTileImg = new Image();
+            pathTileImg.src = 'pics/Path_Tile.png';
+
+            const poodleImg = new Image();
+            poodleImg.src = 'pics/poodle-rm.png';
+
+            // (Tuỳ chọn) Overlay dấu chân 32x16 ở nửa dưới
+            // Cắt (sx, sy, sw, sh) = (0, 80, 16, 16)
+            drawpoodle = (dx, dy, size, scale = 2) => {
+                const dw = Math.floor(size * scale);
+                const dh = Math.floor(size * scale);
+                const ddx = dx + Math.floor((size - dw) / 2); // canh giữa theo ngang
+                const ddy = dy + Math.floor((size - dh) / 2); //
+                ctx.drawImage(poodleImg, ddx, ddy, dw, dh);
+            };
+            function drawFootprints1(dx, dy, size, scale = 0.4) {
+                const dw = Math.floor(size * scale);
+                const dh = Math.floor(size * scale);
+                const ddx = dx + Math.floor((size - dw) / 2); // canh giữa theo ngang
+                const ddy = dy + (size - dh); // đặt ở nửa dưới ô
+
+                ctx.drawImage(pathTileImg, 0, 80, 16, 16, ddx, ddy, dw, dh);
+            }
+            function drawFootprints2(dx, dy, size, scale = 0.4) {
+                const dw = Math.floor(size * scale);
+                const dh = Math.floor(size * scale);
+                const ddx = dx + Math.floor((size - dw) / 2); // canh giữa theo ngang
+                const ddy = dy + (size - dh); // đặt ở nửa dưới ô
+
+                ctx.drawImage(pathTileImg, 17, 80, 16, 16, ddx, ddy, dw, dh);
+            }
+            function drawFootprints3(dx, dy, size, scale = 0.4) {
+                const dw = Math.floor(size * scale);
+                const dh = Math.floor(size * scale);
+                const ddx = dx + Math.floor((size - dw) / 2); // canh giữa theo ngang
+                const ddy = dy + (size - dh); // đặt ở nửa dưới ô
+
+                ctx.drawImage(pathTileImg, 33, 80, 16, 16, ddx, ddy, dw, dh);
+            }
+
+            function drawGrassLeft(dx, dy, size, scale = 1) {
+                const dw = Math.floor(size * scale);
+                const dh = Math.floor(size * scale);
+                const ddx = dx + Math.floor((size - dw) / 2); // canh giữa theo ngang
+                const ddy = dy + Math.floor((size - dh) / 2); //
+
+                ctx.drawImage(pathTileImg, 0, 11.5, 13.5, 25, ddx, ddy, dw, dh);
+            }
+            function drawGrassRight(dx, dy, size, scale = 1) {
+                const dw = Math.floor(size * scale);
+                const dh = Math.floor(size * scale);
+                const ddx = dx + Math.floor((size - dw) / 2); // canh giữa theo ngang
+                const ddy = dy + Math.floor((size - dh) / 2); //
+
+                ctx.drawImage(
+                    pathTileImg,
+                    34,
+                    12,
+                    13.5,
+                    23.5,
+                    ddx,
+                    ddy,
+                    dw,
+                    dh
+                );
+            }
+            function drawGrassTop(dx, dy, size, scale = 1) {
+                const dw = Math.floor(size * scale);
+                const dh = Math.floor(size * scale);
+                const ddx = dx + Math.floor((size - dw) / 2); // canh giữa theo ngang
+                const ddy = dy + Math.floor((size - dh) / 2); //
+
+                ctx.drawImage(pathTileImg, 12, 0, 24, 14, ddx, ddy, dw, dh);
+            }
+            function drawGrassBottom(dx, dy, size, scale = 1) {
+                const dw = Math.floor(size * scale);
+                const dh = Math.floor(size * scale);
+                const ddx = dx + Math.floor((size - dw) / 2); // canh giữa theo ngang
+                const ddy = dy + Math.floor((size - dh) / 2); //
+
+                ctx.drawImage(pathTileImg, 12, 35, 24, 14, ddx, ddy, dw, dh);
+            }
+            function drawGrassCornerTopLeft(dx, dy, size, scale = 1) {
+                const dw = Math.floor(size * scale);
+                const dh = Math.floor(size * scale);
+                const ddx = dx + Math.floor((size - dw) / 2); // canh giữa theo ngang
+                const ddy = dy + Math.floor((size - dh) / 2); //
+
+                ctx.drawImage(pathTileImg, 0, 0, 12, 12, ddx, ddy, dw, dh);
+            }
+            function drawGrassCornerTopRight(dx, dy, size, scale = 1) {
+                const dw = Math.floor(size * scale);
+                const dh = Math.floor(size * scale);
+                const ddx = dx + Math.floor((size - dw) / 2); // canh giữa theo ngang
+                const ddy = dy + Math.floor((size - dh) / 2); //
+
+                ctx.drawImage(pathTileImg, 35, 0, 12, 12, ddx, ddy, dw, dh);
+            }
+            function drawGrassCornerBottomLeft(dx, dy, size, scale = 1) {
+                const dw = Math.floor(size * scale);
+                const dh = Math.floor(size * scale);
+                const ddx = dx + Math.floor((size - dw) / 2); // canh giữa theo ngang
+                const ddy = dy + Math.floor((size - dh) / 2); //
+
+                ctx.drawImage(pathTileImg, 0, 35, 12, 12, ddx, ddy, dw, dh);
+            }
+            function drawGrassCornerBottomRight(dx, dy, size, scale = 1) {
+                const dw = Math.floor(size * scale);
+                const dh = Math.floor(size * scale);
+                const ddx = dx + Math.floor((size - dw) / 2); // canh giữa theo ngang
+                const ddy = dy + Math.floor((size - dh) / 2); //
+
+                ctx.drawImage(pathTileImg, 35, 35, 12, 12, ddx, ddy, dw, dh);
+            }
+            // ===== Sprite sheet (192x320 = 6 cột x 10 hàng) =====
+            const img = new Image();
+            img.src = 'pics/SpriteSheet.png';
+            const COLS = 9,
+                ROWS = 9;
+            let fw, fh; // 32x32
+            let col = 0; // frame 0..2
+            let row = 0; // hàng
+            let tick = 0,
+                ticksPerFrame = 8;
+            const FRAMES_PER_ROW = 3; // chỉ 3 cột đầu
+
+            // Dùng 3 hàng đầu: down=0, side=1 (trái/phải cùng hàng), up=2
+            const DIR_ROW = { down: 0, side: 2, up: 4 };
+
+            // ===== Player trên lưới =====
+            let player = { gx: 1, gy: 1 };
+            let flipX = false; // mirror khi đi LEFT
+            function drawMaze() {
+                for (let y = 0; y < mazeMap.length; y++) {
+                    for (let x = 0; x < mazeMap[y].length; x++) {
+                        const cell = mazeMap[y][x];
+                        const dx = x * tileSize,
+                            dy = y * tileSize;
+                        ctx.drawImage(
+                            pathMiddleImg,
+                            dx,
+                            dy,
+                            tileSize,
+                            tileSize
+                        );
+                        if (cell === 1) {
+                            if (grassReady) {
+                                ctx.drawImage(
+                                    grassImg,
+                                    dx,
+                                    dy,
+                                    tileSize,
+                                    tileSize
+                                );
+                            } else {
+                                ctx.fillStyle = 'black';
+                                ctx.fillRect(dx, dy, tileSize, tileSize);
+                            }
+                        } else if (cell === 2) {
+                            drawpoodle(dx, dy, tileSize);
+                        } else if (cell === 3) {
+                            drawGrassBottom(dx, dy, tileSize);
+                        } else if (cell === 4) {
+                            drawGrassCornerBottomLeft(dx, dy, tileSize);
+                        } else if (cell === 5) {
+                            drawGrassCornerTopLeft(dx, dy, tileSize);
+                        } else if (cell === 6) {
+                            drawGrassCornerTopRight(dx, dy, tileSize);
+                        } else if (cell === 7) {
+                            drawGrassLeft(dx, dy, tileSize);
+                        } else if (cell === 8) {
+                            drawGrassRight(dx, dy, tileSize);
+                        } else if (cell === 9) {
+                            drawGrassTop(dx, dy, tileSize);
+                        } else if (cell === 13) {
+                            drawGrassCornerBottomRight(dx, dy, tileSize);
+                        } else {
+                            if (pathMiddleReady) {
+                                ctx.drawImage(
+                                    pathMiddleImg,
+                                    dx,
+                                    dy,
+                                    tileSize,
+                                    tileSize
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+
+            function drawPlayer() {
+                const sx = col * fw;
+                const sy = row * fh;
+                const dx = player.gx * tileSize;
+                const dy = player.gy * tileSize;
+                const dw = tileSize * 0.6,
+                    dh = tileSize * 0.8;
+
+                if (flipX) {
+                    ctx.save();
+                    ctx.translate(dx + dw, dy);
+                    ctx.scale(-1, 1);
+                    ctx.drawImage(img, sx, sy, fw, fh, 0, 0, dw, dh);
+                    ctx.restore();
+                } else {
+                    ctx.drawImage(img, sx, sy, fw, fh, dx, dy, dw, dh);
+                }
+            }
+            // --- Enemy sprite sheet ---
+            const enemyImg = new Image();
+            enemyImg.src = 'pics/cat.png';
+            const ENEMY_COLS = 4,
+                ENEMY_ROWS = 4;
+            let eFW = 48,
+                eFH = 48; // fallback
+
+            enemyImg.onload = () => {
+                eFW = enemyImg.width / ENEMY_COLS; //
+                eFH = enemyImg.height / ENEMY_ROWS; //
+            };
+
+            // Dùng 3 hàng đầu: down=0, side=1 (trái/phải cùng hàng), up=2
+            const eDIR_ROW = { down: 0, up: 1, side: 3 };
+
+            // Danh sách enemy (có trạng thái animation riêng)
+            const enemies = [
+                {
+                    gx: 1,
+                    ox: 1,
+                    gy: 6,
+                    oy: 6,
+                    r: 6,
+                    mode: 'WANDER',
+                    wx: null,
+                    wy: null,
+                    wait: 0,
+                    tx: null,
+                    ty: null,
+                    replan: 0,
+                    ecol: 0,
+                    erow: eDIR_ROW.down,
+                    eflipX: false,
+                    etick: 0,
+                },
+                {
+                    gx: 12,
+                    ox: 12,
+                    gy: 3,
+                    oy: 3,
+                    r: 5,
+                    mode: 'WANDER',
+                    wx: null,
+                    wy: null,
+                    wait: 0,
+                    tx: null,
+                    ty: null,
+                    replan: 0,
+                    ecol: 0,
+                    erow: eDIR_ROW.down,
+                    eflipX: false,
+                    etick: 0,
+                },
+                {
+                    gx: 16,
+                    ox: 16,
+                    gy: 12,
+                    oy: 12,
+                    r: 8,
+                    mode: 'WANDER',
+                    wx: null,
+                    wy: null,
+                    wait: 0,
+                    tx: null,
+                    ty: null,
+                    replan: 0,
+                    ecol: 0,
+                    erow: eDIR_ROW.down,
+                    eflipX: false,
+                    etick: 0,
+                },
+            ];
+
+            // === Pixel-food sprites ===
+            // Change the file names/paths to your actual assets.
+            // Recommended source size: 16x16 or 32x32 per icon (single frame).
+            const FOOD_SPRITES = {
+                cheesecake: {
+                    src: 'pics/cheesecake.png',
+                    img: new Image(),
+                    ready: false,
+                    w: 32,
+                    h: 32,
+                    scale: 0.6,
+                },
+                dumplings: {
+                    src: 'pics/dumplings_dish.png',
+                    img: new Image(),
+                    ready: false,
+                    w: 32,
+                    h: 32,
+                    scale: 0.6,
+                },
+                strawberrycake: {
+                    src: 'pics/strawberrycake_dish.png',
+                    img: new Image(),
+                    ready: false,
+                    w: 32,
+                    h: 32,
+                    scale: 0.6,
+                },
+                taco: {
+                    src: 'pics/taco.png',
+                    img: new Image(),
+                    ready: false,
+                    w: 32,
+                    h: 32,
+                    scale: 0.8,
+                },
+            };
+
+            for (const k in FOOD_SPRITES) {
+                const s = FOOD_SPRITES[k];
+                s.img.onload = () => {
+                    // Use the actual image size if not set
+                    if (!s.w) s.w = s.img.naturalWidth || s.w;
+                    if (!s.h) s.h = s.img.naturalHeight || s.h;
+                    s.ready = true;
+                };
+                s.img.src = s.src;
+            }
+            function drawFoods() {
+                for (const it of items) {
+                    const dx = it.x * tileSize;
+                    const dy = it.y * tileSize;
+
+                    // subtle bobbing (pixel-art safe because imageSmoothing is disabled)
+                    const bob =
+                        Math.sin((foodTick + (it.x + it.y) * 11) * 0.12) *
+                        (tileSize * 0.08);
+
+                    // pick sprite by type; fallback to 'candy' if unknown
+                    const sp =
+                        FOOD_SPRITES[it.type] || FOOD_SPRITES.strawberrycake;
+
+                    // target size (scaled but keeping pixel ratio)
+                    const baseScale = sp.scale ?? 0.85; // 85% of a tile by default
+                    const scale = Math.min(
+                        (tileSize * baseScale) / sp.w,
+                        (tileSize * baseScale) / sp.h
+                    );
+
+                    const dw = Math.max(1, Math.round(sp.w * scale));
+                    const dh = Math.max(1, Math.round(sp.h * scale));
+
+                    // center in tile and apply bob
+                    const ox = Math.round(dx + (tileSize - dw) / 2);
+                    const oy = Math.round(dy + (tileSize - dh) / 2 - bob);
+
+                    if (sp.ready) {
+                        ctx.drawImage(sp.img, 0, 0, sp.w, sp.h, ox, oy, dw, dh);
+                    } else {
+                        // minimal fallback box (until the image loads)
+                        ctx.fillStyle = '#000';
+                        ctx.fillRect(ox, oy, dw, dh);
+                    }
+                }
+            }
+
+            function withinRadius(e, x, y) {
+                const dx = x - e.ox,
+                    dy = y - e.oy;
+                return dx * dx + dy * dy <= e.r * e.r; // bán kính Euclid theo ô
+            }
+            function pickRandomWalkableCellInRadius(e, attempts = 30) {
+                const H = mazeMap.length,
+                    W = mazeMap[0].length;
+                for (let i = 0; i < attempts; i++) {
+                    const rx =
+                        e.ox + Math.floor(Math.random() * (2 * e.r + 1) - e.r);
+                    const ry =
+                        e.oy + Math.floor(Math.random() * (2 * e.r + 1) - e.r);
+                    if (rx < 0 || ry < 0 || rx >= W || ry >= H) continue;
+                    if (!withinRadius(e, rx, ry)) continue;
+                    if (SOLID.has(mazeMap[ry][rx])) continue; // tránh tường/đồ trang trí rắn
+                    if (
+                        rx === Math.floor(e.gx + 0.5) &&
+                        ry === Math.floor(e.gy + 0.5)
+                    )
+                        continue; // khác ô hiện tại
+                    return { x: rx, y: ry };
+                }
+                // fallback: quay về gốc
+                return { x: e.ox, y: e.oy };
+            }
+            // Tốc độ/chu kỳ
+            const ENEMY_SPEED = 0.025; // ô / frame
+            const REPLAN_EVERY = 12; // replan BFS mỗi 12 frame
+            const E_FRAMES_PER_ROW = 3; // 3 frame đầu
+            const E_TICKS_PER_FRAME = 8; // tốc độ animation
+
+            // --- Vẽ tất cả enemy (sprite + flip) ---
+            function drawEnemies() {
+                for (const e of enemies) {
+                    const sx = e.ecol * eFW;
+                    const sy = e.erow * eFH;
+                    const dx = e.gx * tileSize;
+                    const dy = e.gy * tileSize;
+                    const dw = tileSize * 1.3,
+                        dh = tileSize * 1.3;
+
+                    if (e.eflipX) {
+                        ctx.save();
+                        ctx.translate(dx + dw, dy);
+                        ctx.scale(-1, 1);
+                        ctx.drawImage(enemyImg, sx, sy, eFW, eFH, 0, 0, dw, dh);
+                        ctx.restore();
+                    } else {
+                        ctx.drawImage(
+                            enemyImg,
+                            sx,
+                            sy,
+                            eFW,
+                            eFH,
+                            dx,
+                            dy,
+                            dw,
+                            dh
+                        );
+                    }
+                }
+            }
+            let foodTick = 0;
+
+            // Cho updateAnim nhận cờ moved, idle thì reset frame
+            function updateAnim(moved) {
+                if (!moved) {
+                    col = 0;
+                    tick = 0;
+                    return;
+                }
+                tick++;
+                if (tick > ticksPerFrame) {
+                    tick = 0;
+                    col = (col + 1) % FRAMES_PER_ROW;
+                }
+            }
+            // --- Cập nhật enemy (BFS đuổi player + animation theo hướng) ---
+            function updateEnemies() {
+                const pCellX = Math.floor(player.gx + 0.5);
+                const pCellY = Math.floor(player.gy + 0.5);
+
+                for (const e of enemies) {
+                    const sX = Math.floor(e.gx + 0.5),
+                        sY = Math.floor(e.gy + 0.5);
+                    const playerIn = withinRadius(e, pCellX, pCellY);
+
+                    // --- Chọn mục tiêu theo trạng thái ---
+                    if (playerIn) {
+                        // CHASE
+                        e.mode = 'CHASE';
+                        e.wx = e.wy = null; // bỏ mục tiêu wander cũ
+                        // replan theo timer/đến nơi
+                        const needReplan =
+                            e.replan <= 0 ||
+                            e.tx == null ||
+                            (sX === e.tx && sY === e.ty);
+                        if (needReplan) {
+                            const step = bfsNextStepForEnemy(
+                                e,
+                                sX,
+                                sY,
+                                pCellX,
+                                pCellY
+                            );
+                            if (step) {
+                                e.tx = step.x;
+                                e.ty = step.y;
+                            } else {
+                                e.tx = e.ty = null;
+                            }
+                            e.replan = REPLAN_EVERY;
+                        } else {
+                            e.replan--;
+                        }
+                    } else {
+                        // WANDER trong bán kính
+                        if (e.mode !== 'WANDER') {
+                            e.mode = 'WANDER';
+                            e.wx = null;
+                            e.wy = null;
+                            e.wait = 0;
+                            e.tx = e.ty = null;
+                        }
+
+                        // Nghỉ 1 chút khi tới điểm (cho tự nhiên)
+                        if (e.wait > 0) {
+                            e.wait--;
+                        }
+
+                        // Nếu chưa có mục tiêu wander, hoặc đã tới/ra khỏi bán kính → chọn điểm mới
+                        const reachedW =
+                            e.wx != null && sX === e.wx && sY === e.wy;
+                        if (
+                            e.wx == null ||
+                            !withinRadius(e, e.wx, e.wy) ||
+                            reachedW
+                        ) {
+                            const t = pickRandomWalkableCellInRadius(e);
+                            e.wx = t.x;
+                            e.wy = t.y;
+                            e.replan = 0; // buộc replan
+                            if (reachedW)
+                                e.wait = 10 + ((Math.random() * 20) | 0); // nghỉ 10-30 frame
+                        }
+
+                        // Lập đường tới điểm wander hiện tại
+                        if (
+                            e.replan <= 0 ||
+                            e.tx == null ||
+                            (sX === e.tx && sY === e.ty)
+                        ) {
+                            const step = bfsNextStepForEnemy(
+                                e,
+                                sX,
+                                sY,
+                                e.wx,
+                                e.wy
+                            );
+                            if (step) {
+                                e.tx = step.x;
+                                e.ty = step.y;
+                            } else {
+                                e.tx = e.ty = null;
+                                e.wx = e.wy = null;
+                            }
+                            e.replan = REPLAN_EVERY;
+                        } else {
+                            e.replan--;
+                        }
+                    }
+
+                    // --- Nếu không có bước đi hợp lệ thì idle ---
+                    if (e.tx == null) {
+                        e.ecol = 0;
+                        e.etick = 0;
+                        continue;
+                    }
+
+                    // Vector tới ô mục tiêu
+                    let dx = e.tx - e.gx,
+                        dy = e.ty - e.gy;
+                    const ax = Math.abs(dx),
+                        ay = Math.abs(dy);
+                    dx =
+                        ax > 1e-6
+                            ? Math.sign(dx) * Math.min(ENEMY_SPEED, ax)
+                            : 0;
+                    dy =
+                        ay > 1e-6
+                            ? Math.sign(dy) * Math.min(ENEMY_SPEED, ay)
+                            : 0;
+                    if (dx && dy) {
+                        dx *= Math.SQRT1_2;
+                        dy *= Math.SQRT1_2;
+                    }
+
+                    // Hàng sprite + flip
+                    if (Math.abs(dx) > Math.abs(dy)) {
+                        e.erow = eDIR_ROW.side;
+                        e.eflipX = dx < 0; // phải = lật
+                    } else if (Math.abs(dy) > 0) {
+                        e.erow = dy > 0 ? eDIR_ROW.down : eDIR_ROW.up;
+                        // giữ eflipX khi đi dọc
+                    }
+
+                    const bx = e.gx,
+                        by = e.gy;
+                    moveEnemy(e, dx, dy); // bản có radius
+
+                    // Snap để hết rung
+                    if (
+                        Math.abs(e.gx - e.tx) < 1e-3 &&
+                        Math.abs(e.gy - e.ty) < 1e-3
+                    ) {
+                        e.gx = e.tx;
+                        e.gy = e.ty;
+                    }
+
+                    // Animate khi có di chuyển
+                    const moved =
+                        Math.abs(e.gx - bx) + Math.abs(e.gy - by) > 1e-4;
+                    if (moved) {
+                        e.etick++;
+                        if (e.etick > E_TICKS_PER_FRAME) {
+                            e.etick = 0;
+                            e.ecol = (e.ecol + 1) % E_FRAMES_PER_ROW;
+                        }
+                    } else {
+                        e.ecol = 0;
+                        e.etick = 0;
+                    }
+
+                    // Đụng player?
+                    if (
+                        hitboxesOverlap(
+                            e.gx,
+                            e.gy,
+                            player.gx,
+                            player.gy,
+                            e.prevGx ?? e.gx,
+                            e.prevGy ?? e.gy,
+                            player.prevGx ?? player.gx,
+                            player.prevGy ?? player.gy
+                        )
+                    ) {
+                        showFailedModal();
+                        resetGame();
+                        return;
+                    }
+                }
+            }
+
+            function loop() {
+                FRAME++;
+                LOOP_STARTED = true;
+                let moved = false;
+
+                if (!PAUSED) {
+                    if (JUST_RESET > 0) {
+                        JUST_RESET--; // bỏ qua logic frame này
+                    } else {
+                        moved =
+                            typeof updateMovement === 'function'
+                                ? updateMovement()
+                                : false;
+
+                        updateFood();
+                        updateEnemies(); // <-- thêm
+                    }
+                }
+                updateAnim(moved); // animation player (idle khi không moving)
+
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                drawMaze();
+                drawEnemies(); // vẽ enemy
+                drawPlayer();
+                drawFoods(); // vẽ đồ ăn
+                requestAnimationFrame(loop);
+            }
+
+            img.onload = () => {
+                fw = img.width / COLS; // 192/6 = 32
+                fh = img.height / ROWS; // 320/10 = 32
+                loop();
+            };
+
+            // ===== Movement theo speed + collision =====
+            const SPEED = 0.04; // ô / frame
+            const BOOST_SPEED = 0.055; // tốc độ khi có kẹo
+            const BOOST_SECS = 2; // số giây tăng tốc
+            const FPS_GUESS = 60; // game loop ~60fps
+            const BOOST_FRAMES = BOOST_SECS * FPS_GUESS;
+
+            let boostTicks = 0;
+            let boostSpeed = SPEED;
+            const keys = Object.create(null);
+
+            document.addEventListener('keydown', (e) => {
+                keys[e.key] = true;
+                if (
+                    [
+                        'ArrowLeft',
+                        'ArrowRight',
+                        'ArrowUp',
+                        'ArrowDown',
+                        ' ',
+                    ].includes(e.key)
+                ) {
+                    e.preventDefault();
+                }
+                if (e.key === 'ArrowDown') {
+                    row = DIR_ROW.down;
+                    flipX = false;
+                }
+                if (e.key === 'ArrowUp') {
+                    row = DIR_ROW.up;
+                    flipX = false;
+                }
+                if (e.key === 'ArrowLeft') {
+                    row = DIR_ROW.side;
+                    flipX = true;
+                } // left = không lật
+                if (e.key === 'ArrowRight') {
+                    row = DIR_ROW.side;
+                    flipX = false;
+                } // right = lật gương
+            });
+            document.addEventListener('keyup', (e) => {
+                keys[e.key] = false;
+            });
+            // ===== Intro / Help =====
+            let PAUSED = true; // game tạm dừng khi mở trang
+            let LOOP_STARTED = false; // chỉ để chắc chắn loop đã chạy
+            const introEl = document.getElementById('introBackdrop');
+            const btnStart = document.getElementById('btnStart');
+            const btnBack = document.getElementById('btnBack');
+            const dontShow = document.getElementById('introDontShow');
+
+            function showIntro(force = false) {
+                const skip = localStorage.getItem('maze_skip_intro') === '1';
+                if (!force && skip) {
+                    PAUSED = false;
+                    return;
+                }
+                introEl.classList.remove('hidden');
+                PAUSED = true;
+            }
+
+            function hideIntro() {
+                console.log('hide Intro');
+                introEl.classList.add('hidden');
+                PAUSED = false;
+                if (dontShow?.checked)
+                    localStorage.setItem('maze_skip_intro', '1'); // dùng ?. để tránh null
+            }
+
+            // Phím tắt: Enter/Space bắt đầu; H bật/tắt bảng hướng dẫn
+            window.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    if (!introEl.classList.contains('hidden')) hideIntro();
+                }
+                if (e.key.toLowerCase() === 'h') {
+                    if (introEl.classList.contains('hidden')) {
+                        showIntro(true);
+                    } else {
+                        hideIntro();
+                    }
+                }
+            });
+
+            // Gọi khi trang sẵn sàng
+            window.addEventListener('load', () => {
+                showIntro();
+            });
+            btnStart?.addEventListener('click', hideIntro);
+            btnBack?.addEventListener('click', () => {
+                window.location.href = 'index.html';
+            });
+            // Những ô không đi qua
+            const SOLID = new Set([1, 3, 6, 7, 8, 5, 9, 10, 13]); // tường/grass decor của bạn
+
+            // Hitbox theo ĐƠN VỊ Ô (1 = 1 tile). Nhỏ hơn 1 để đi sát mép cho mượt.
+            const HIT_W = 0.2; // rộng hitbox ~70% 1 ô
+            const HIT_H = 0.5; // cao hitbox  ~80% 1 ô
+            const MARGIN_X = (1 - HIT_W) / 2; // lề trái/phải trong 1 ô
+            const MARGIN_Y = (1 - HIT_H) / 2; // lề trên/dưới trong 1 ô
+            const EPS = 1e-6;
+
+            // Kiểm tra hitbox (neo theo top-left của người chơi) có đè lên ô rắn không
+            function overlapsSolid(topLeftX, topLeftY) {
+                // khung hitbox theo world (đơn vị ô)
+                const left = topLeftX + MARGIN_X;
+                const right = topLeftX + 1 - MARGIN_X - EPS;
+                const top = topLeftY + MARGIN_Y;
+                const bottom = topLeftY + 1 - MARGIN_Y - EPS;
+
+                // các ô bị phủ
+                const xi0 = Math.floor(left);
+                const xi1 = Math.floor(right);
+                const yi0 = Math.floor(top);
+                const yi1 = Math.floor(bottom);
+
+                for (let y = yi0; y <= yi1; y++) {
+                    if (y < 0 || y >= mazeMap.length) return true; // ngoài map coi là rắn
+                    for (let x = xi0; x <= xi1; x++) {
+                        if (x < 0 || x >= mazeMap[0].length) return true;
+                        if (SOLID.has(mazeMap[y][x])) return true;
+                    }
+                }
+                return false;
+            }
+
+            // (tuỳ chọn) chạm đích nếu hitbox đè lên ô goal
+            function touchesGoal(topLeftX, topLeftY) {
+                const left = topLeftX + MARGIN_X;
+                const right = topLeftX + 1 - MARGIN_X - EPS;
+                const top = topLeftY + MARGIN_Y;
+                const bottom = topLeftY + 1 - MARGIN_Y - EPS;
+
+                const xi0 = Math.floor(left);
+                const xi1 = Math.floor(right);
+                const yi0 = Math.floor(top);
+                const yi1 = Math.floor(bottom);
+
+                for (let y = yi0; y <= yi1; y++) {
+                    for (let x = xi0; x <= xi1; x++) {
+                        if (mazeMap[y] && mazeMap[y][x] === 2) return true;
+                    }
+                }
+                return false;
+            }
+            let FRAME = 0;
+            let JUST_RESET = 0; // bao nhiêu frame bỏ qua update logic
+            let inputLockUntil = 0; // FRAME mốc đến khi nào thì bỏ qua input
+
+            function clearKeys() {
+                // set false cho các phím điều hướng bạn đang dùng
+                keys['ArrowLeft'] = false;
+                keys['ArrowRight'] = false;
+                keys['ArrowUp'] = false;
+                keys['ArrowDown'] = false;
+            }
+
+            function resetPlayerTo(x, y) {
+                player.gx = x;
+                player.gy = y;
+                player.prevGx = x;
+                player.prevGy = y; // rất quan trọng: đồng bộ prev
+                // (tuỳ chọn) trả animation về idle
+                col = 0;
+                tick = 0;
+            }
+
+            function resetEnemies() {
+                for (const e of enemies) {
+                    e.gx = e.ox;
+                    e.gy = e.oy; // đồng bộ prev
+                    e.tx = null;
+                    e.ty = null; // huỷ mục tiêu đang đuổi
+                    e.replan = 0; // ép replan lần sau
+                    e.ecol = 0;
+                    e.etick = 0; // idle anim
+                }
+            }
+
+            player.prevGx = player.gx;
+            player.prevGy = player.gy;
+
+            function tryMove(dx, dy) {
+                player.prevGx = player.gx;
+                player.prevGy = player.gy;
+                let nx = player.gx,
+                    ny = player.gy;
+                if (dx) {
+                    const tx = nx + dx;
+                    if (!overlapsSolid(tx, ny)) nx = tx;
+                }
+                if (dy) {
+                    const ty = ny + dy;
+                    if (!overlapsSolid(nx, ty)) ny = ty;
+                }
+                player.gx = nx;
+                player.gy = ny;
+                if (touchesGoal(player.gx, player.gy)) {
+                    setTimeout(() => {
+                        window.location.href = 'prize.html';
+                    }, 10);
+                }
+            }
+
+            function moveEnemy(e, dx, dy) {
+                e.prevGx = e.gx;
+                e.prevGy = e.gy;
+                let nx = e.gx,
+                    ny = e.gy;
+                if (dx) {
+                    const tx = nx + dx;
+                    if (!overlapsSolid(tx, ny)) nx = tx;
+                }
+                if (dy) {
+                    const ty = ny + dy;
+                    if (!overlapsSolid(nx, ty)) ny = ty;
+                }
+                e.gx = nx;
+                e.gy = ny;
+            }
+            function applyFoodEffect(type) {
+                if (type !== 'BOOST') return;
+                // extend time
+                boostTicks += Math.round(BOOST_SECS * FPS_GUESS);
+            }
+
+            const items = [
+                { x: 3, y: 1, type: 'cheesecake' },
+                { x: 10, y: 4, type: 'dumplings' },
+                { x: 14, y: 10, type: 'taco' },
+                { x: 17, y: 7, type: 'strawberrycake' },
+            ];
+            // Spawn only on path (0) and avoid player/enemies
+            function cellFree(x, y) {
+                if (!mazeMap[y] || mazeMap[y][x] !== 0) return false;
+                if (
+                    Math.floor(player.gx + 0.5) === x &&
+                    Math.floor(player.gy + 0.5) === y
+                )
+                    return false;
+                if (typeof enemies !== 'undefined') {
+                    for (const e of enemies) {
+                        if (
+                            Math.floor(e.gx + 0.5) === x &&
+                            Math.floor(e.gy + 0.5) === y
+                        )
+                            return false;
+                    }
+                }
+                return true;
+            }
+
+            function spawnFoods(
+                plan = { candy: 6, apple: 6, donut: 2, soda: 2 }
+            ) {
+                items.length = 0;
+                const H = mazeMap.length,
+                    W = mazeMap[0].length;
+
+                const all = [];
+                for (const [type, n] of Object.entries(plan)) {
+                    for (let i = 0; i < n; i++) all.push(type);
+                }
+
+                let tries = 0;
+                while (all.length && tries < W * H * 5) {
+                    tries++;
+                    const idx = (Math.random() * all.length) | 0;
+                    const type = all[idx];
+                    const x = (Math.random() * W) | 0,
+                        y = (Math.random() * H) | 0;
+                    if (!cellFree(x, y)) continue;
+                    items.push({ x, y, type });
+                    all.splice(idx, 1);
+                }
+            }
+            function playerTouchesCell(x, y, shrink = 0.5) {
+                // Hitbox của food căn giữa ô
+                const foodCenterX = x + 0.5;
+                const foodCenterY = y + 0.5;
+                const foodHW = shrink / 2;
+                const foodHH = shrink / 2;
+
+                // Hitbox của player căn giữa ô
+                const playerCenterX = player.gx + 0.5;
+                const playerCenterY = player.gy + 0.5;
+                const playerHW = HIT_W / 2;
+                const playerHH = HIT_H / 2;
+
+                // Kiểm tra overlap giữa 2 hitbox căn giữa
+                return !(
+                    playerCenterX + playerHW < foodCenterX - foodHW ||
+                    playerCenterX - playerHW > foodCenterX + foodHW ||
+                    playerCenterY + playerHH < foodCenterY - foodHH ||
+                    playerCenterY - playerHH > foodCenterY + foodHH
+                );
+            }
+            function updateFood() {
+                // pick up
+                for (let i = items.length - 1; i >= 0; i--) {
+                    const it = items[i];
+                    if (playerTouchesCell(it.x, it.y)) {
+                        applyFoodEffect('BOOST'); // <- all foods call this
+                        items.splice(i, 1);
+                    }
+                }
+                if (boostTicks > 0) {
+                    boostTicks--;
+                    if (boostTicks === 0) boostSpeed = SPEED;
+                }
+
+                foodTick++;
+            }
+
+            function updateMovement() {
+                if (FRAME < inputLockUntil) return false;
+
+                const S = boostTicks > 0 ? BOOST_SPEED : SPEED;
+                // ý định theo trục: -1, 0, 1
+                let ax = 0,
+                    ay = 0;
+                if (keys['ArrowLeft']) ax -= 1;
+                if (keys['ArrowRight']) ax += 1;
+                if (keys['ArrowUp']) ay -= 1;
+                if (keys['ArrowDown']) ay += 1;
+
+                // chuyển ý định thành vận tốc
+                let dx = 0,
+                    dy = 0;
+                if (ax && ay) {
+                    // giữ tốc độ chéo bằng tốc độ thẳng
+                    const k = Math.SQRT1_2; // = 1/√2
+                    dx = ax * S * k;
+                    dy = ay * S * k;
+                } else {
+                    dx = ax * S;
+                    dy = ay * S;
+                }
+
+                let moved = false;
+                if (dx) {
+                    const ox = player.gx;
+                    tryMove(dx, 0);
+                    moved ||= player.gx !== ox;
+                }
+                if (dy) {
+                    const oy = player.gy;
+                    tryMove(0, dy);
+                    moved ||= player.gy !== oy;
+                }
+                return moved;
+            }
+
+            function bfsNextStepForEnemy(e, sx, sy, tx, ty) {
+                const H = mazeMap.length,
+                    W = mazeMap[0].length;
+                const inb = (x, y) => x >= 0 && x < W && y >= 0 && y < H;
+                const blocked = (x, y) =>
+                    !inb(x, y) ||
+                    !withinRadius(e, x, y) ||
+                    SOLID.has(mazeMap[y][x]);
+
+                if (blocked(sx, sy)) return null;
+                const prev = Array.from({ length: H }, () =>
+                    Array(W).fill(null)
+                );
+                const q = [{ x: sx, y: sy }];
+                prev[sy][sx] = { x: sx, y: sy };
+                const dirs = [
+                    [1, 0],
+                    [-1, 0],
+                    [0, 1],
+                    [0, -1],
+                ];
+
+                while (q.length) {
+                    const cur = q.shift();
+                    if (cur.x === tx && cur.y === ty) break;
+                    for (const [dx, dy] of dirs) {
+                        const nx = cur.x + dx,
+                            ny = cur.y + dy;
+                        if (blocked(nx, ny) || prev[ny][nx]) continue;
+                        prev[ny][nx] = cur;
+                        q.push({ x: nx, y: ny });
+                    }
+                }
+                if (!prev[ty] || !prev[ty][tx]) return null;
+
+                // lần ngược để lấy ô đầu tiên sau start
+                let step = { x: tx, y: ty };
+                while (
+                    prev[step.y][step.x] &&
+                    !(step.x === sx && step.y === sy)
+                ) {
+                    const p = prev[step.y][step.x];
+                    if (p.x === sx && p.y === sy) break;
+                    step = p;
+                }
+                return step;
+            }
+
+            // Nên bóp hitbox 1 chút cho dễ bắt
+            const CATCH_MARGIN_X = MARGIN_X * 0.7;
+            const CATCH_MARGIN_Y = MARGIN_Y * 0.7;
+
+            function sweptOverlap(x1, y1, px1, py1, x2, y2, px2, py2) {
+                // hộp bao trùm đường đi của mỗi bên
+                const left1 = Math.min(x1, px1) + CATCH_MARGIN_X;
+                const right1 = Math.max(x1, px1) + 1 - CATCH_MARGIN_X - EPS;
+                const top1 = Math.min(y1, py1) + CATCH_MARGIN_Y;
+                const bottom1 = Math.max(y1, py1) + 1 - CATCH_MARGIN_Y - EPS;
+
+                const left2 = Math.min(x2, px2) + CATCH_MARGIN_X;
+                const right2 = Math.max(x2, px2) + 1 - CATCH_MARGIN_X - EPS;
+                const top2 = Math.min(y2, py2) + CATCH_MARGIN_Y;
+                const bottom2 = Math.max(y2, py2) + 1 - CATCH_MARGIN_Y - EPS;
+
+                return !(
+                    right1 < left2 ||
+                    right2 < left1 ||
+                    bottom1 < top2 ||
+                    bottom2 < top1
+                );
+            }
+
+            function crossedAxis(axis, e, p) {
+                const ex0 = e.prevGx ?? e.gx,
+                    ey0 = e.prevGy ?? e.gy;
+                const px0 = p.prevGx ?? p.gx,
+                    py0 = p.prevGy ?? p.gy;
+
+                // đổi dấu theo trục?
+                const d0 = axis === 'y' ? ey0 - py0 : ex0 - px0;
+                const d1 = axis === 'y' ? e.gy - p.gy : e.gx - p.gx;
+                if (d0 * d1 > 0) return false; // không cắt nhau
+
+                // chiếu sang trục còn lại: phải có chồng lên nhau trong quá trình di chuyển
+                if (axis === 'y') {
+                    const eL = Math.min(ex0, e.gx) + CATCH_MARGIN_X;
+                    const eR = Math.max(ex0, e.gx) + 1 - CATCH_MARGIN_X - EPS;
+                    const pL = Math.min(px0, p.gx) + CATCH_MARGIN_X;
+                    const pR = Math.max(px0, p.gx) + 1 - CATCH_MARGIN_X - EPS;
+                    return !(eR < pL || pR < eL);
+                } else {
+                    // axis === 'x'
+                    const eT = Math.min(ey0, e.gy) + CATCH_MARGIN_Y;
+                    const eB = Math.max(ey0, e.gy) + 1 - CATCH_MARGIN_Y - EPS;
+                    const pT = Math.min(py0, p.gy) + CATCH_MARGIN_Y;
+                    const pB = Math.max(py0, p.gy) + 1 - CATCH_MARGIN_Y - EPS;
+                    return !(eB < pT || pB < eT);
+                }
+            }
+
+            function hitboxesOverlap(
+                x1,
+                y1,
+                x2,
+                y2,
+                px1 = x1,
+                py1 = y1,
+                px2 = x2,
+                py2 = y2
+            ) {
+                // 1) swept AABB
+                if (sweptOverlap(x1, y1, px1, py1, x2, y2, px2, py2))
+                    return true;
+                // 2) crossing test theo cả 2 trục (đặc biệt fix case cùng cột)
+                const e = { gx: x1, gy: y1, prevGx: px1, prevGy: py1 };
+                const p = { gx: x2, gy: y2, prevGx: px2, prevGy: py2 };
+                if (crossedAxis('y', e, p)) return true;
+                if (crossedAxis('x', e, p)) return true;
+                return false;
+            }
+
+            function showFailedModal() {
+                alert('Bạn nựng mèo hết cả tiếng, Bơ dỗi rồi 😺');
+            }
+
+            function resetGame() {
+                // Đặt lại vị trí player về vị trí bắt đầu
+                const SPAWN_X = 1,
+                    SPAWN_Y = 1; // đổi theo map của bạn
+
+                resetPlayerTo(SPAWN_X, SPAWN_Y);
+                resetEnemies();
+                clearKeys();
+                JUST_RESET = 1; // bỏ qua update logic trong 1 frame
+                inputLockUntil = FRAME + 8;
+
+                // Đặt lại đồ ăn
+                items.length = 0;
+                items.push(
+                    { x: 3, y: 1, type: 'cheesecake' },
+                    { x: 10, y: 4, type: 'dumplings' },
+                    { x: 14, y: 10, type: 'taco' },
+                    { x: 17, y: 7, type: 'strawberrycake' }
+                );
+            }
+        </script>
+    </body>
+</html>
